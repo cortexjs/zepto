@@ -218,6 +218,30 @@
         $.get('echo', { sample: 'plain' }, 'text')
       },
 
+      testAjaxGetWithParamsAutoParsesJSON: function(t) {
+        t.pause()
+        $.get('json', { sample: 'data' }, t.reg.resumeHandler('success', function(data){
+          t.assertEqual('data', data.query.sample)
+          t.assertEqual('world', data.hello)
+        }))
+      },
+
+      testAjaxGetNoParamsAutoParsesJSON: function(t) {
+        t.pause()
+        $.get('json', t.reg.resumeHandler('success', function(data){
+          t.assertIdentical(0, $.map(data.query).length)
+          t.assertEqual('world', data.hello)
+        }))
+      },
+
+      testAjaxGetNullParamsAutoParsesJSON: function(t) {
+        t.pause()
+        $.get('json', null, t.reg.resumeHandler('success', function(data){
+          t.assertIdentical(0, $.map(data.query).length)
+          t.assertEqual('world', data.hello)
+        }))
+      },
+
       testAjaxBeforeSendSetRequestHeader: function(t){
         t.pause()
         $.ajax({
@@ -252,6 +276,14 @@
           t.assertLine("accept: text/plain", response)
           t.assertLine('{"sample":"data"}', response)
         }), 'text')
+      },
+
+      testAjaxPostAutoParsesJSON: function(t) {
+        t.pause()
+        var payload = { sample: 'data' }
+        $.post('create', payload, t.reg.resumeHandler('success', function(data){
+          t.assertEqual('data', data.payload.sample)
+        }))
       },
 
       testNumberOfActiveRequests: function(t) {
@@ -334,6 +366,19 @@
             var globalErrorArgs = t.reg.args('ajaxError')
             t.assert(globalErrorArgs[3] instanceof SyntaxError)
             t.assertEqual(0, $('script[src^=slow]').size())
+          })
+        })
+      },
+
+      testAjaxEqualQuestionmarkIsNotAlwaysJSONP: function(t){
+        t.pause()
+        resumeOnAjaxError(t)
+        $.ajax({
+          url: 'echo=?',
+          dataType: 'text',
+          success: t.reg.resumeHandler('success', function(data){
+            t.assertLine('GET ?{}', data)
+            t.assertLine("accept: text/plain", data)
           })
         })
       },
@@ -533,7 +578,8 @@
           })
         })
 
-        t.assertEqual($('head script:last-child').attr('src'), 'jsonpBlah')
+        var scriptSrc = $('head script:last-child').attr('src')
+        t.assert(/^jsonpBlah\?_=[\d]{13}$/.test(scriptSrc), scriptSrc)
         t.assert($.isFunction(window.blah))
         t.pause()
       },
@@ -549,7 +595,8 @@
           })
         })
 
-        t.assertEqual($('head script:last-child').attr('src'), 'jsonpBlah')
+        var scriptSrc = $('head script:last-child').attr('src')
+        t.assert(/^jsonpBlah\?_=[\d]{13}$/.test(scriptSrc), scriptSrc)
         t.assert($.isFunction(window.blah))
         t.pause()
       },
@@ -603,6 +650,29 @@
             t.assertLinePattern(/"_":(\[".*",)?"[\d]{13}"/g, response)
           })
         })
+      },
+
+      testJSONPCacheBustingByDefault: function(t) {
+        $.ajax({
+          url: 'jsonp?callback=?',
+          success: t.reg.resumeHandler('success')
+        })
+
+        var scriptSrc = $('head script:last-child').attr('src')
+        t.assert(/^jsonp\?callback=jsonp\d+&_=[\d]{13}$/.test(scriptSrc), scriptSrc)
+        t.pause()
+      },
+
+      testJSONPCacheBustingDisabled: function(t) {
+        $.ajax({
+          url: 'jsonp?callback=?',
+          cache: true,
+          success: t.reg.resumeHandler('success')
+        })
+
+        var scriptSrc = $('head script:last-child').attr('src')
+        t.assert(/^jsonp\?callback=jsonp\d+$/.test(scriptSrc), scriptSrc)
+        t.pause()
       },
 
       testBrowserCaching: function(t) {
@@ -881,6 +951,18 @@
           xhrFields: { withCredentials: true }
         })
         t.assert(xhr.withCredentials)
+      },
+
+      testScriptDataTypeCacheBustByDefault: function(t) {
+        $.ajax({ url: '/', dataType: 'script' })
+        var xhr = MockXHR.last
+        t.assert(/^\/\?_=[\d]{13}$/.test(xhr.url), xhr.url)
+      },
+
+      testScriptDataTypeCacheBustDisable: function(t) {
+        $.ajax({ url: '/', dataType: 'script', cache: true })
+        var xhr = MockXHR.last
+        t.assertEqual('/', xhr.url)
       },
 
       testJSONdataType: function(t) {
